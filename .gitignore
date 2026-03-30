@@ -1,0 +1,9 @@
+.env
+.env.local
+.venv/
+__pycache__/
+*.pyc
+output/*
+!output/company_watch/
+output/company_watch/*
+!output/company_watch/state.json

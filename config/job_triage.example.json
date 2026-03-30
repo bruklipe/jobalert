@@ -1,0 +1,80 @@
+{
+  "source": {
+    "type": "json",
+    "path": "../input/sample_jobs.json",
+    "host_env": "INDEED_IMAP_HOST",
+    "user_env": "INDEED_IMAP_USER",
+    "password_env": "INDEED_IMAP_PASSWORD",
+    "password_keychain_service_env": "INDEED_IMAP_PASSWORD_KEYCHAIN_SERVICE",
+    "password_keychain_service": "indeed-job-triage-imap",
+    "folder": "INBOX",
+    "search": "ALL",
+    "from": "alert@indeed.com",
+    "limit": 20
+  },
+  "profile": {
+    "job_titles": [
+      "software engineer",
+      "software developer",
+      "frontend developer",
+      "web developer",
+      "solutions engineer",
+      "technical sales engineer",
+      "sales engineer"
+    ],
+    "locations": [
+      "remote",
+      "michigan",
+      "mi",
+      "texas",
+      "tx",
+      "arizona",
+      "az",
+      "ohio",
+      "oh",
+      "north carolina",
+      "nc",
+      "south carolina",
+      "sc",
+      "florida",
+      "fl",
+      "detroit"
+    ],
+    "required_keywords": [],
+    "preferred_keywords": [
+      "python",
+      "c++",
+      "automation",
+      "api",
+      "integration",
+      "technical documentation",
+      "customer",
+      "client",
+      "solution",
+      "pre-sales",
+      "sales engineering",
+      "javascript",
+      "react",
+      "typescript",
+      "html",
+      "css"
+    ],
+    "exclude_keywords": [
+      "contract",
+      "commission only"
+    ],
+    "allowed_experience_years_max": 1
+  },
+  "ollama": {
+    "enabled": false,
+    "model": "llama3.1:8b",
+    "base_url": "http://127.0.0.1:11434",
+    "timeout_seconds": 60
+  },
+  "output": {
+    "report_path": "../output/job_triage/latest_report.md",
+    "summary_path": "../output/job_triage/latest_summary.md",
+    "json_path": "../output/job_triage/latest_results.json",
+    "state_path": "../output/job_triage/state.json"
+  }
+}

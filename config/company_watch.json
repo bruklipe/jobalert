@@ -1,0 +1,212 @@
+{
+  "sources": [
+    {
+      "name": "Stellantis",
+      "type": "stellantis_cws",
+      "enabled": true,
+      "api_url": "https://jobsapi-internal.m-cloud.io/api/",
+      "organization": "2016",
+      "detail_base_url": "https://careers.stellantis.com",
+      "careers_url": "https://careers.stellantis.com/job-search-results/",
+      "page_size": 20,
+      "max_pages_per_query": 2,
+      "search_keywords": [
+        "software engineer",
+        "software developer",
+        "frontend developer",
+        "web developer",
+        "solutions engineer",
+        "technical sales engineer",
+        "sales engineer",
+        "field application engineer",
+        "application engineer"
+      ]
+    },
+    {
+      "name": "Ford",
+      "type": "ford_radancy",
+      "enabled": true,
+      "careers_url": "https://www.careers.ford.com/",
+      "search_url": "https://www.careers.ford.com/search-jobs",
+      "states": [
+        "Michigan",
+        "Texas",
+        "Arizona",
+        "Ohio",
+        "North Carolina",
+        "South Carolina",
+        "Florida"
+      ],
+      "search_keywords": [
+        "software engineer",
+        "software developer",
+        "frontend developer",
+        "web developer",
+        "solutions engineer",
+        "technical sales engineer",
+        "sales engineer",
+        "field application engineer",
+        "application engineer"
+      ]
+    },
+    {
+      "name": "General Motors",
+      "type": "gm_workday",
+      "enabled": true,
+      "base_url": "https://generalmotors.wd5.myworkdayjobs.com",
+      "tenant": "generalmotors",
+      "site": "Careers_GM",
+      "careers_url": "https://search-careers.gm.com/en/search-jobs",
+      "page_size": 20,
+      "max_pages_per_query": 3,
+      "search_keywords": [
+        "software engineer",
+        "software developer",
+        "frontend developer",
+        "solutions engineer",
+        "technical sales engineer",
+        "sales engineer",
+        "field application engineer",
+        "application engineer"
+      ]
+    },
+    {
+      "name": "Magna",
+      "type": "magna_workday",
+      "enabled": true,
+      "base_url": "https://wd3.myworkdaysite.com",
+      "tenant": "magna",
+      "site": "Magna",
+      "careers_url": "https://jobs.magna.com/go/Magna-Jobs-in-the-United-States/2665217/",
+      "page_size": 20,
+      "max_pages_per_query": 2,
+      "search_keywords": [
+        "software engineer",
+        "software developer",
+        "frontend developer",
+        "solutions engineer",
+        "technical sales engineer",
+        "sales engineer",
+        "field application engineer",
+        "application engineer"
+      ]
+    },
+    {
+      "name": "Toyota",
+      "type": "toyota_phenom",
+      "enabled": true,
+      "search_url": "https://careers.toyota.com/us/en/search-results",
+      "detail_base_url": "https://careers.toyota.com/us/en",
+      "careers_url": "https://careers.toyota.com/us/en/search-results",
+      "page_size": 10,
+      "max_pages": 12
+    },
+    {
+      "name": "Honda",
+      "type": "honda_phenom",
+      "enabled": true,
+      "search_url": "https://careers.honda.com/us/en/search-results",
+      "detail_base_url": "https://careers.honda.com/us/en",
+      "careers_url": "https://careers.honda.com/us/en/search-results",
+      "page_size": 10,
+      "max_pages": 10
+    },
+    {
+      "name": "KEYENCE",
+      "type": "keyence_rss",
+      "enabled": true,
+      "rss_url": "https://careers.keyence.com/services/rss/category/?catid=7816100",
+      "careers_url": "https://careers.keyence.com/go/View-All-Careers/7816100/"
+    }
+  ],
+  "profile": {
+    "job_titles": [
+      "software engineer",
+      "software developer",
+      "frontend developer",
+      "web developer",
+      "solutions engineer",
+      "technical sales engineer",
+      "sales engineer",
+      "field application engineer",
+      "application engineer"
+    ],
+    "locations": [
+      "remote",
+      "michigan",
+      "mi",
+      "saline",
+      "ann arbor",
+      "dearborn",
+      "warren",
+      "texas",
+      "tx",
+      "plano",
+      "arizona",
+      "az",
+      "ohio",
+      "oh",
+      "north carolina",
+      "nc",
+      "south carolina",
+      "sc",
+      "florida",
+      "fl",
+      "detroit"
+    ],
+    "required_keywords": [],
+    "preferred_keywords": [
+      "python",
+      "c++",
+      "automation",
+      "api",
+      "integration",
+      "technical documentation",
+      "customer",
+      "client",
+      "solution",
+      "pre-sales",
+      "sales engineering",
+      "javascript",
+      "react",
+      "typescript",
+      "html",
+      "css",
+      "embedded",
+      "ecu",
+      "testing",
+      "vehicle"
+    ],
+    "exclude_keywords": [
+      "contract",
+      "commission only"
+    ],
+    "allowed_experience_years_max": 1,
+    "max_post_age_days": 14
+  },
+  "ollama": {
+    "enabled": true,
+    "model": "llama3.1:8b",
+    "base_url": "http://127.0.0.1:11434",
+    "timeout_seconds": 60,
+    "skip_rejects": true,
+    "minimum_rule_score": 40
+  },
+  "output": {
+    "raw_jobs_path": "../output/company_watch/collected_jobs.json",
+    "report_path": "../output/company_watch/latest_report.md",
+    "summary_path": "../output/company_watch/latest_summary.md",
+    "json_path": "../output/company_watch/latest_results.json",
+    "state_path": "../output/company_watch/state.json"
+  },
+  "email": {
+    "enabled": true,
+    "method": "apple_mail",
+    "from_address": "bruklipe@yahoo.com",
+    "to": [
+      "bruklipe@yahoo.com",
+      "bruklipe@umich.edu"
+    ],
+    "subject_prefix": "Daily company job watch"
+  }
+}

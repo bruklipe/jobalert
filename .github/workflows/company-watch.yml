@@ -1,0 +1,83 @@
+name: Company Job Watch
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "30 12 * * *"
+    - cron: "30 13 * * *"
+    - cron: "5 0 * * *"
+    - cron: "5 1 * * *"
+
+concurrency:
+  group: company-job-watch
+  cancel-in-progress: false
+
+jobs:
+  run-watch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Check Detroit schedule window
+        id: schedule_gate
+        run: |
+          detroit_time="$(TZ=America/Detroit date +%H:%M)"
+          echo "Detroit time: ${detroit_time}"
+          if [ "${detroit_time}" = "08:30" ] || [ "${detroit_time}" = "20:05" ]; then
+            echo "run_watch=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "run_watch=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Run company watch
+        if: ${{ github.event_name == 'workflow_dispatch' || steps.schedule_gate.outputs.run_watch == 'true' }}
+        env:
+          JOB_WATCH_EMAIL_METHOD: smtp
+          JOB_WATCH_FROM_ADDRESS: ${{ secrets.JOB_WATCH_FROM_ADDRESS }}
+          JOB_WATCH_SMTP_HOST: ${{ secrets.JOB_WATCH_SMTP_HOST }}
+          JOB_WATCH_SMTP_PORT: ${{ secrets.JOB_WATCH_SMTP_PORT }}
+          JOB_WATCH_SMTP_USERNAME: ${{ secrets.JOB_WATCH_SMTP_USERNAME }}
+          JOB_WATCH_SMTP_PASSWORD: ${{ secrets.JOB_WATCH_SMTP_PASSWORD }}
+          JOB_WATCH_SMTP_USE_SSL: ${{ secrets.JOB_WATCH_SMTP_USE_SSL }}
+          JOB_WATCH_OLLAMA_ENABLED: "false"
+        run: |
+          python3 "${{ github.workspace }}/scripts/company_job_watch.py" \
+            --config "${{ github.workspace }}/config/company_watch.json"
+
+      - name: Upload latest outputs
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: company-watch-latest
+          path: |
+            output/company_watch/latest_summary.md
+            output/company_watch/latest_report.md
+            output/company_watch/latest_results.json
+            output/company_watch/collected_jobs.json
+            output/company_watch/state.json
+          if-no-files-found: ignore
+
+      - name: Persist company watch state
+        if: ${{ github.event_name == 'workflow_dispatch' || steps.schedule_gate.outputs.run_watch == 'true' }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add output/company_watch/state.json
+          if git diff --cached --quiet; then
+            echo "No company watch state changes to commit."
+            exit 0
+          fi
+          git commit -m "chore: update company watch state"
+          git pull --rebase origin "${GITHUB_REF_NAME}"
+          git push origin HEAD:"${GITHUB_REF_NAME}"

@@ -32,47 +32,46 @@ jobs:
       - name: Check Detroit schedule window
         id: schedule_gate
         run: |
-          export DETROIT_DATE="$(TZ=America/Detroit date +%Y-%m-%d)"
-          export DETROIT_TIME="$(TZ=America/Detroit date +%H:%M)"
+          DETROIT_DATE="$(TZ=America/Detroit date +%Y-%m-%d)"
+          DETROIT_TIME="$(TZ=America/Detroit date +%H:%M)"
           echo "Detroit date: ${DETROIT_DATE}"
           echo "Detroit time: ${DETROIT_TIME}"
-          python3 - <<'PY'
-          import json
-          import os
-          from pathlib import Path
+          slot=""
+          if [[ "${DETROIT_TIME}" > "08:29" && "${DETROIT_TIME}" < "09:06" ]]; then
+            slot="morning"
+          elif [[ "${DETROIT_TIME}" > "20:04" && "${DETROIT_TIME}" < "20:36" ]]; then
+            slot="evening"
+          fi
 
-          detroit_date = os.environ["DETROIT_DATE"]
-          detroit_time = os.environ["DETROIT_TIME"]
+          if [ -z "${slot}" ]; then
+            echo "run_watch=false" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
 
-          slot = ""
-          if "08:30" <= detroit_time <= "09:05":
-              slot = "morning"
-          elif "20:05" <= detroit_time <= "20:35":
-              slot = "evening"
+          last_sent_date="$(python3 -c 'import json, pathlib; p = pathlib.Path("output/company_watch/digest_state.json"); payload = {}; 
+if p.exists():
+    try:
+        payload = json.loads(p.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        payload = {}
+print(payload.get("last_sent_date", ""))')"
+          last_sent_slot="$(python3 -c 'import json, pathlib; p = pathlib.Path("output/company_watch/digest_state.json"); payload = {};
+if p.exists():
+    try:
+        payload = json.loads(p.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        payload = {}
+print(payload.get("last_sent_slot", ""))')"
 
-          if not slot:
-              with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as handle:
-                  handle.write("run_watch=false\n")
-              raise SystemExit(0)
+          if [ "${last_sent_date}" = "${DETROIT_DATE}" ] && [ "${last_sent_slot}" = "${slot}" ]; then
+            run_watch="false"
+          else
+            run_watch="true"
+          fi
 
-          state_path = Path("output/company_watch/digest_state.json")
-          last_sent_date = ""
-          last_sent_slot = ""
-          if state_path.exists():
-              try:
-                  payload = json.loads(state_path.read_text(encoding="utf-8"))
-              except json.JSONDecodeError:
-                  payload = {}
-              last_sent_date = str(payload.get("last_sent_date", ""))
-              last_sent_slot = str(payload.get("last_sent_slot", ""))
-
-          run_watch = not (last_sent_date == detroit_date and last_sent_slot == slot)
-
-          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as handle:
-              handle.write(f"run_watch={'true' if run_watch else 'false'}\n")
-              handle.write(f"slot={slot}\n")
-              handle.write(f"detroit_date={detroit_date}\n")
-          PY
+          echo "run_watch=${run_watch}" >> "${GITHUB_OUTPUT}"
+          echo "slot=${slot}" >> "${GITHUB_OUTPUT}"
+          echo "detroit_date=${DETROIT_DATE}" >> "${GITHUB_OUTPUT}"
 
       - name: Run company watch
         if: ${{ github.event_name == 'workflow_dispatch' || steps.schedule_gate.outputs.run_watch == 'true' }}
@@ -107,20 +106,8 @@ jobs:
         if: ${{ github.event_name == 'workflow_dispatch' || steps.schedule_gate.outputs.run_watch == 'true' }}
         run: |
           if [ "${GITHUB_EVENT_NAME}" = "schedule" ]; then
-            python3 - <<'PY'
-            import json
-            import os
-            from pathlib import Path
-
-            path = Path("output/company_watch/digest_state.json")
-            path.parent.mkdir(parents=True, exist_ok=True)
-            payload = {
-                "last_sent_date": os.environ["DIGEST_STATE_DATE"],
-                "last_sent_slot": os.environ["DIGEST_STATE_SLOT"],
-                "sent_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(timespec="seconds"),
-            }
-            path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
-            PY
+            mkdir -p output/company_watch
+            python3 -c 'import datetime, json, os, pathlib; path = pathlib.Path("output/company_watch/digest_state.json"); payload = {"last_sent_date": os.environ["DIGEST_STATE_DATE"], "last_sent_slot": os.environ["DIGEST_STATE_SLOT"], "sent_at": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")}; path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")'
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

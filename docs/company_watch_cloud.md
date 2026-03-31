@@ -51,13 +51,15 @@ The workflow is set up for:
 - 8:30 AM America/Detroit
 - 8:05 PM America/Detroit
 
-GitHub Actions schedules use UTC cron, so the workflow schedules both the EST and EDT UTC windows and then double-checks Detroit local time before it runs the scraper.
+GitHub Actions can delay or skip individual scheduled runs, so the workflow now checks every 30 minutes and only sends once per Detroit morning slot and once per Detroit evening slot. That gives it a retry window instead of relying on one exact minute.
 
 The night run is a few minutes after 8 PM to avoid the busiest GitHub Actions queue window at the top of the hour.
 
 ## State persistence
 
 The GitHub workflow commits `output/company_watch/state.json` back to the repository after a successful run. That keeps the "new jobs" memory across runs so you do not get the same postings re-emailed every day.
+
+It also commits `output/company_watch/digest_state.json` so the schedule knows whether the current morning or evening digest has already been sent.
 
 If email delivery fails, the state is not committed. That means the next run can retry the same new jobs instead of silently skipping them.
 

@@ -6,4 +6,5 @@ __pycache__/
 output/*
 !output/company_watch/
 output/company_watch/*
+!output/company_watch/digest_state.json
 !output/company_watch/state.json

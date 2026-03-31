@@ -110,7 +110,18 @@ jobs:
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add output/painting_bid_watch/state.json output/painting_bid_watch/digest_state.json
+          paths_to_add=""
+          if [ -f output/painting_bid_watch/state.json ]; then
+            paths_to_add="$paths_to_add output/painting_bid_watch/state.json"
+          fi
+          if [ -f output/painting_bid_watch/digest_state.json ]; then
+            paths_to_add="$paths_to_add output/painting_bid_watch/digest_state.json"
+          fi
+          if [ -z "${paths_to_add}" ]; then
+            echo "No painting bid watch state files to add."
+            exit 0
+          fi
+          git add ${paths_to_add}
           if git diff --cached --quiet; then
             echo "No painting bid watch state changes to commit."
             exit 0

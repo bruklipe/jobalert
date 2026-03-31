@@ -94,19 +94,19 @@ jobs:
         if: ${{ github.event_name == 'workflow_dispatch' || steps.schedule_gate.outputs.run_watch == 'true' }}
         run: |
           if [ "${GITHUB_EVENT_NAME}" = "schedule" ]; then
-            python3 - <<'PY'
-            import json
-            import os
-            from pathlib import Path
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
 
-            path = Path("output/painting_bid_watch/digest_state.json")
-            path.parent.mkdir(parents=True, exist_ok=True)
-            payload = {
-                "last_sent_date": os.environ["DIGEST_STATE_DATE"],
-                "sent_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(timespec="seconds"),
-            }
-            path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
-            PY
+          path = Path("output/painting_bid_watch/digest_state.json")
+          path.parent.mkdir(parents=True, exist_ok=True)
+          payload = {
+              "last_sent_date": os.environ["DIGEST_STATE_DATE"],
+              "sent_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(timespec="seconds"),
+          }
+          path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+          PY
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

@@ -1,0 +1,93 @@
+{
+  "sources": [
+    {
+      "name": "SAM.gov Contract Opportunities",
+      "type": "sam_gov",
+      "enabled": true,
+      "api_key_env": "PAINTING_WATCH_SAM_API_KEY",
+      "states": [
+        "MI"
+      ],
+      "page_size": 100,
+      "max_pages_per_query": 2,
+      "searches": [
+        {
+          "label": "NAICS 238320",
+          "naics_code": "238320"
+        },
+        {
+          "label": "painting",
+          "title": "painting"
+        },
+        {
+          "label": "repainting",
+          "title": "repainting"
+        },
+        {
+          "label": "paint",
+          "title": "paint"
+        },
+        {
+          "label": "coating",
+          "title": "coating"
+        }
+      ]
+    }
+  ],
+  "filters": {
+    "states": [
+      "MI"
+    ],
+    "preferred_states": [
+      "MI"
+    ],
+    "max_post_age_days": 14,
+    "allowed_notice_types": [
+      "Solicitation",
+      "Combined Synopsis/Solicitation",
+      "Presolicitation",
+      "Sources Sought",
+      "Special Notice"
+    ],
+    "preferred_naics_codes": [
+      "238320"
+    ],
+    "include_keywords": [
+      "painting",
+      "repainting",
+      "paint",
+      "coating",
+      "wall covering",
+      "wallcovering",
+      "sandblasting"
+    ],
+    "exclude_keywords": [
+      "janitorial",
+      "laundry"
+    ]
+  },
+  "output": {
+    "raw_path": "../output/painting_bid_watch/collected_opportunities.json",
+    "summary_path": "../output/painting_bid_watch/latest_summary.md",
+    "report_path": "../output/painting_bid_watch/latest_report.md",
+    "json_path": "../output/painting_bid_watch/latest_results.json",
+    "state_path": "../output/painting_bid_watch/state.json"
+  },
+  "email": {
+    "enabled": true,
+    "method": "apple_mail",
+    "method_env": "PAINTING_WATCH_EMAIL_METHOD",
+    "from_address": "bruklipe@yahoo.com",
+    "from_address_env": "JOB_WATCH_FROM_ADDRESS",
+    "to": [
+      "bruklipe@yahoo.com",
+      "bruklipe@umich.edu"
+    ],
+    "subject_prefix": "Daily painting bid watch",
+    "smtp_host_env": "JOB_WATCH_SMTP_HOST",
+    "smtp_port_env": "JOB_WATCH_SMTP_PORT",
+    "smtp_username_env": "JOB_WATCH_SMTP_USERNAME",
+    "smtp_password_env": "JOB_WATCH_SMTP_PASSWORD",
+    "smtp_use_ssl_env": "JOB_WATCH_SMTP_USE_SSL"
+  }
+}

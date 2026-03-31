@@ -62,6 +62,20 @@ class RankedOpportunity:
     is_new: bool
 
 
+@dataclass
+class CollectionIssue:
+    source: str
+    code: str
+    message: str
+    next_access_time: str = ""
+
+
+class SamRateLimitError(RuntimeError):
+    def __init__(self, message: str, next_access_time: str = "") -> None:
+        super().__init__(message)
+        self.next_access_time = next_access_time
+
+
 def log(message: str) -> None:
     print(message, file=sys.stderr, flush=True)
 
@@ -84,6 +98,18 @@ def fetch_json(url: str, params: Dict[str, Any]) -> Dict[str, Any]:
             return json.loads(response.read().decode(charset, errors="ignore"))
     except urllib.error.HTTPError as exc:
         body = exc.read().decode("utf-8", errors="ignore").strip()
+        parsed_body: Dict[str, Any] = {}
+        if body:
+            try:
+                parsed_body = json.loads(body)
+            except json.JSONDecodeError:
+                parsed_body = {}
+        if exc.code == 429:
+            next_access_time = triage.normalize_whitespace(str(parsed_body.get("nextAccessTime", "")))
+            message = triage.normalize_whitespace(str(parsed_body.get("description") or parsed_body.get("message") or "Message throttled out"))
+            if next_access_time:
+                message = f"{message} Next access time: {next_access_time}."
+            raise SamRateLimitError(message, next_access_time=next_access_time) from exc
         detail = body[:300] if body else exc.reason
         raise RuntimeError(f"HTTP {exc.code} from {url}: {detail}") from exc
     except urllib.error.URLError as exc:
@@ -142,6 +168,13 @@ def format_datetime_label(value: str) -> str:
     if parsed is None:
         return triage.normalize_whitespace(str(value))
     return parsed.astimezone(dt.timezone.utc).date().isoformat()
+
+
+def format_next_access_label(value: str) -> str:
+    parsed = parse_datetime(value)
+    if parsed is None:
+        return triage.normalize_whitespace(str(value))
+    return parsed.astimezone().isoformat(timespec="minutes")
 
 
 def extract_state(place: Dict[str, Any]) -> str:
@@ -259,7 +292,16 @@ def build_search_requests(source_cfg: Dict[str, Any], filters_cfg: Dict[str, Any
     return [{"label": keyword, "title": keyword, "naics_code": ""} for keyword in fallback_keywords]
 
 
-def collect_sam_opportunities(source_cfg: Dict[str, Any], filters_cfg: Dict[str, Any]) -> List[OpportunityRecord]:
+def dedupe_opportunities(opportunities: List[OpportunityRecord]) -> List[OpportunityRecord]:
+    deduped: Dict[str, OpportunityRecord] = {}
+    for opportunity in opportunities:
+        key = stable_opportunity_key(opportunity)
+        if key not in deduped:
+            deduped[key] = opportunity
+    return list(deduped.values())
+
+
+def collect_sam_opportunities(source_cfg: Dict[str, Any], filters_cfg: Dict[str, Any]) -> Tuple[List[OpportunityRecord], List[CollectionIssue]]:
     api_key_env = triage.normalize_whitespace(str(source_cfg.get("api_key_env", "PAINTING_WATCH_SAM_API_KEY")))
     api_key = os.getenv(api_key_env, "").strip()
     if not api_key:
@@ -279,6 +321,7 @@ def collect_sam_opportunities(source_cfg: Dict[str, Any], filters_cfg: Dict[str,
     posted_to = dt.datetime.now(dt.timezone.utc).strftime("%m/%d/%Y")
 
     collected: List[OpportunityRecord] = []
+    issues: List[CollectionIssue] = []
     for state in states:
         for search in searches:
             offset = 0
@@ -298,7 +341,23 @@ def collect_sam_opportunities(source_cfg: Dict[str, Any], filters_cfg: Dict[str,
                     "Collecting SAM.gov opportunities"
                     f" [state={state or 'any'} search={search['label'] or 'default'} offset={offset}]..."
                 )
-                payload = fetch_json(SAM_OPPORTUNITIES_URL, params)
+                try:
+                    payload = fetch_json(SAM_OPPORTUNITIES_URL, params)
+                except SamRateLimitError as exc:
+                    next_access_label = format_next_access_label(exc.next_access_time) if exc.next_access_time else ""
+                    message = "SAM.gov API quota was exhausted during this run."
+                    if next_access_label:
+                        message += f" Next access window: {next_access_label}."
+                    log(message)
+                    issues.append(
+                        CollectionIssue(
+                            source="sam_gov",
+                            code="rate_limited",
+                            message=message,
+                            next_access_time=exc.next_access_time,
+                        )
+                    )
+                    return dedupe_opportunities(collected), issues
                 items = payload.get("opportunitiesData") or []
                 if not items:
                     break
@@ -360,12 +419,7 @@ def collect_sam_opportunities(source_cfg: Dict[str, Any], filters_cfg: Dict[str,
                 if len(items) < page_size:
                     break
                 offset += page_size
-    deduped: Dict[str, OpportunityRecord] = {}
-    for opportunity in collected:
-        key = stable_opportunity_key(opportunity)
-        if key not in deduped:
-            deduped[key] = opportunity
-    return list(deduped.values())
+    return dedupe_opportunities(collected), issues
 
 
 def matches_allowed_notice_type(opportunity: OpportunityRecord, filters_cfg: Dict[str, Any]) -> bool:
@@ -472,10 +526,13 @@ def render_resource_links(resource_links: List[str], limit: int = 4) -> str:
     return "; ".join(visible) + suffix
 
 
-def build_email_subject(ranked: List[RankedOpportunity], prefix: str) -> str:
+def build_email_subject(ranked: List[RankedOpportunity], prefix: str, issues: Optional[List[CollectionIssue]] = None) -> str:
     today = dt.datetime.now().strftime("%Y-%m-%d")
     new_count = sum(1 for item in ranked if item.is_new)
     total_count = len(ranked)
+    issues = issues or []
+    if any(issue.code == "rate_limited" for issue in issues):
+        return f"{prefix} {today}: source quota reached"
     if new_count:
         return f"{prefix} {today}: {new_count} new lead{'s' if new_count != 1 else ''}"
     if total_count:
@@ -483,8 +540,9 @@ def build_email_subject(ranked: List[RankedOpportunity], prefix: str) -> str:
     return f"{prefix} {today}: no matches"
 
 
-def build_summary(ranked: List[RankedOpportunity], config: Dict[str, Any]) -> str:
+def build_summary(ranked: List[RankedOpportunity], config: Dict[str, Any], issues: Optional[List[CollectionIssue]] = None) -> str:
     filters_cfg = config.get("filters", {})
+    issues = issues or []
     states = normalize_list(filters_cfg.get("states", [])) or ["any state"]
     max_post_age_days = int(filters_cfg.get("max_post_age_days", 14))
     new_items = [item for item in ranked if item.is_new]
@@ -499,6 +557,12 @@ def build_summary(ranked: List[RankedOpportunity], config: Dict[str, Any]) -> st
         f"New matches since last run: {len(new_items)}",
         "",
     ]
+
+    if issues:
+        lines.append("Run notes:")
+        for issue in issues:
+            lines.append(f"- {issue.message}")
+        lines.append("")
 
     if new_items:
         lines.append("New opportunities:")
@@ -520,7 +584,10 @@ def build_summary(ranked: List[RankedOpportunity], config: Dict[str, Any]) -> st
                 ]
             )
     else:
-        lines.append("No new painting-related bid opportunities matched today.")
+        if any(issue.code == "rate_limited" for issue in issues):
+            lines.append("No new painting-related bid opportunities were reviewed because the SAM.gov API quota was exhausted for this key.")
+        else:
+            lines.append("No new painting-related bid opportunities matched today.")
         lines.append("")
 
     if existing_items:
@@ -536,8 +603,9 @@ def build_summary(ranked: List[RankedOpportunity], config: Dict[str, Any]) -> st
     return "\n".join(lines).rstrip() + "\n"
 
 
-def build_report(ranked: List[RankedOpportunity], config: Dict[str, Any]) -> str:
+def build_report(ranked: List[RankedOpportunity], config: Dict[str, Any], issues: Optional[List[CollectionIssue]] = None) -> str:
     filters_cfg = config.get("filters", {})
+    issues = issues or []
     lines = [
         "# Painting Bid Watch",
         "",
@@ -549,8 +617,17 @@ def build_report(ranked: List[RankedOpportunity], config: Dict[str, Any]) -> str
         f"- New opportunities: {sum(1 for item in ranked if item.is_new)}",
         "",
     ]
+    if issues:
+        lines.append("## Run Notes")
+        lines.append("")
+        for issue in issues:
+            lines.append(f"- {issue.message}")
+        lines.append("")
     if not ranked:
-        lines.append("No painting-related opportunities matched the current filters.")
+        if any(issue.code == "rate_limited" for issue in issues):
+            lines.append("No painting-related opportunities were reviewed because the SAM.gov API quota for this key was temporarily exhausted.")
+        else:
+            lines.append("No painting-related opportunities matched the current filters.")
         lines.append("")
         return "\n".join(lines)
 
@@ -597,10 +674,17 @@ def build_report(ranked: List[RankedOpportunity], config: Dict[str, Any]) -> str
     return "\n".join(lines).rstrip() + "\n"
 
 
-def write_outputs(config: Dict[str, Any], config_path: Path, opportunities: List[OpportunityRecord], ranked: List[RankedOpportunity]) -> None:
+def write_outputs(
+    config: Dict[str, Any],
+    config_path: Path,
+    opportunities: List[OpportunityRecord],
+    ranked: List[RankedOpportunity],
+    issues: Optional[List[CollectionIssue]] = None,
+) -> None:
     output_cfg = config["output"]
-    summary = build_summary(ranked, config)
-    report = build_report(ranked, config)
+    issues = issues or []
+    summary = build_summary(ranked, config, issues=issues)
+    report = build_report(ranked, config, issues=issues)
 
     raw_path = (config_path.parent / output_cfg["raw_path"]).resolve()
     summary_path = (config_path.parent / output_cfg["summary_path"]).resolve()
@@ -615,6 +699,7 @@ def write_outputs(config: Dict[str, Any], config_path: Path, opportunities: List
     raw_payload = {
         "generated_at": dt.datetime.now().isoformat(timespec="seconds"),
         "opportunities": [asdict(opportunity) for opportunity in opportunities],
+        "issues": [asdict(issue) for issue in issues],
     }
     result_payload = {
         "generated_at": dt.datetime.now().isoformat(timespec="seconds"),
@@ -622,6 +707,7 @@ def write_outputs(config: Dict[str, Any], config_path: Path, opportunities: List
             "matches": len(ranked),
             "new_matches": sum(1 for item in ranked if item.is_new),
         },
+        "issues": [asdict(issue) for issue in issues],
         "matches": [
             {
                 "score": item.score,
@@ -701,10 +787,11 @@ def send_email_via_smtp(
         server.send_message(message)
 
 
-def maybe_send_digest_email(ranked: List[RankedOpportunity], config: Dict[str, Any]) -> None:
+def maybe_send_digest_email(ranked: List[RankedOpportunity], config: Dict[str, Any], issues: Optional[List[CollectionIssue]] = None) -> None:
     email_cfg = config.get("email", {})
     if not email_cfg.get("enabled", True):
         return
+    issues = issues or []
 
     recipients = [address.strip() for address in email_cfg.get("to", []) if str(address).strip()]
     if not recipients:
@@ -723,8 +810,8 @@ def maybe_send_digest_email(ranked: List[RankedOpportunity], config: Dict[str, A
         )
     ).strip()
     subject_prefix = str(email_cfg.get("subject_prefix", "Daily painting bid watch")).strip() or "Daily painting bid watch"
-    subject = build_email_subject(ranked, subject_prefix)
-    body = build_summary(ranked, config)
+    subject = build_email_subject(ranked, subject_prefix, issues=issues)
+    body = build_summary(ranked, config, issues=issues)
 
     if method == "apple_mail":
         send_email_via_apple_mail(recipients, subject, body, sender=sender)
@@ -784,8 +871,9 @@ def maybe_send_digest_email(ranked: List[RankedOpportunity], config: Dict[str, A
     raise RuntimeError(f"Unsupported email method: {method}")
 
 
-def collect_opportunities(config: Dict[str, Any]) -> List[OpportunityRecord]:
+def collect_opportunities(config: Dict[str, Any]) -> Tuple[List[OpportunityRecord], List[CollectionIssue]]:
     opportunities: List[OpportunityRecord] = []
+    issues: List[CollectionIssue] = []
     for source_cfg in config.get("sources", []):
         if not source_cfg.get("enabled", True):
             continue
@@ -793,10 +881,17 @@ def collect_opportunities(config: Dict[str, Any]) -> List[OpportunityRecord]:
         if source_type != "sam_gov":
             continue
         before = len(opportunities)
-        opportunities.extend(collect_sam_opportunities(source_cfg, config.get("filters", {})))
+        try:
+            source_opportunities, source_issues = collect_sam_opportunities(source_cfg, config.get("filters", {}))
+            opportunities.extend(source_opportunities)
+            issues.extend(source_issues)
+        except RuntimeError as exc:
+            message = f"{source_cfg.get('name', source_type)} collection error: {exc}"
+            log(message)
+            issues.append(CollectionIssue(source=source_type, code="collection_error", message=message))
         added = len(opportunities) - before
         log(f"Collected {added} raw opportunity matches from {source_cfg.get('name', source_type)}.")
-    return opportunities
+    return opportunities, issues
 
 
 def main() -> int:
@@ -825,13 +920,13 @@ def main() -> int:
     )
     config = triage.load_config(config_path)
 
-    opportunities = collect_opportunities(config)
+    opportunities, issues = collect_opportunities(config)
     state_path = (config_path.parent / config["output"]["state_path"]).resolve()
     state = triage.load_state(state_path)
     seen_keys = set(state.get("seen_keys", []))
 
     ranked = rank_opportunities(opportunities, config, seen_keys)
-    write_outputs(config, config_path, opportunities, ranked)
+    write_outputs(config, config_path, opportunities, ranked, issues=issues)
 
     updated_seen = set(seen_keys)
     for opportunity in opportunities:
@@ -839,10 +934,12 @@ def main() -> int:
     triage.save_state(state_path, updated_seen)
 
     if not args.no_email:
-        maybe_send_digest_email(ranked, config)
+        maybe_send_digest_email(ranked, config, issues=issues)
 
     print(f"Collected opportunities: {len(opportunities)}")
     print(f"Matched opportunities: {len(ranked)}")
+    if issues:
+        print(f"Issues: {len(issues)}")
     return 0
 
 

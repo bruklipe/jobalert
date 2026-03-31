@@ -9,27 +9,11 @@
         "MI"
       ],
       "page_size": 100,
-      "max_pages_per_query": 2,
+      "max_pages_per_query": 1,
       "searches": [
         {
           "label": "NAICS 238320",
           "naics_code": "238320"
-        },
-        {
-          "label": "painting",
-          "title": "painting"
-        },
-        {
-          "label": "repainting",
-          "title": "repainting"
-        },
-        {
-          "label": "paint",
-          "title": "paint"
-        },
-        {
-          "label": "coating",
-          "title": "coating"
         }
       ]
     }

@@ -121,7 +121,7 @@ jobs:
             echo "No painting bid watch state files to add."
             exit 0
           fi
-          git add ${paths_to_add}
+          git add -f ${paths_to_add}
           if git diff --cached --quiet; then
             echo "No painting bid watch state changes to commit."
             exit 0
